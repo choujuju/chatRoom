@@ -14,8 +14,8 @@ var users = require('./routes/users');
 var app = express();
 
 // view engine setup
-app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'ejs');
+//app.set('views', path.join(__dirname, 'views'));
+//app.set('view engine', 'ejs');
 
 // uncomment after placing your favicon in /public
 //app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
@@ -83,11 +83,15 @@ var server = app.listen(port,function(){
  * Listen on provided port, on all network interfaces.
  */
 
-//server.listen(port);
-//server.on('error', onError);
-//server.on('listening', onListening);
 var io = require('socket.io').listen(server);
+var messages = [];
 io.sockets.on('connection',function(socket){
-  socket.emit('connected');
+  socket.on('getAllMessages',function(){
+    socket.emit('allMessages',messages);
+  });
+  socket.on('createMessage',function(message){
+    messages.push(message);
+    io.socket.emit('messageAdded',message);
+  });
 });
 module.exports = app;
