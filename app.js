@@ -1,89 +1,47 @@
 var express = require('express');
+var app = express();
 var path = require('path');
-var favicon = require('serve-favicon');
-var logger = require('morgan');
+
 var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
+var session = require('express-session');
+var Controllers = require('./controllers');
 
-var debug = require('debug')('chatRoom:server');
-var http = require('http');
+var signedCookieParser = cookieParser('technode');
+var MongoStore = require('connect-mongo')(session);
+var sessionStore = new MongoStore({
+  url:'mongodb://localhost/chatRoom'
+});
 
-var routes = require('./routes/index');
-var users = require('./routes/users');
-
-var app = express();
-
-// view engine setup
-//app.set('views', path.join(__dirname, 'views'));
-//app.set('view engine', 'ejs');
-
-// uncomment after placing your favicon in /public
-//app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
-app.use(logger('dev'));
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
-//app.use(express.static(path.join(__dirname, 'public')));
+app.use(session({
+  secret:'chatRoom',
+  resave:true,
+  saveUninitialized:false,
+  cookie:{
+    maxAge:60 * 1000* 60
+  },
+  store: sessionStore
+}));
+
 app.use(express.static(path.join(__dirname, '/static')));
 app.use(function(res,res){
   res.sendFile(path.join(__dirname,'/static/index.html'));
 });
 
-app.use('/', routes);
-app.use('/users', users);
-
-// catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  var err = new Error('Not Found');
-  err.status = 404;
-  next(err);
-});
-
-// error handlers
-
-// development error handler
-// will print stacktrace
-if (app.get('env') === 'development') {
-  app.use(function(err, req, res, next) {
-    res.status(err.status || 500);
-    res.render('error', {
-      message: err.message,
-      error: err
-    });
-  });
-}
-
-// production error handler
-// no stacktraces leaked to user
-app.use(function(err, req, res, next) {
-  res.status(err.status || 500);
-  res.render('error', {
-    message: err.message,
-    error: {}
-  });
-});
-
-/**
- * Get port from environment and store in Express.
- */
 
 var port = process.env.PORT || '3000';
 app.set('port', port);
 
-/**
- * Create HTTP server.
- */
 
-//var server = http.createServer(app);
 var server = app.listen(port,function(){
   console.log('chatRoom is on port '+port+'!');
 });
 
-/**
- * Listen on provided port, on all network interfaces.
- */
-
 var io = require('socket.io').listen(server);
+
 var messages = [];
 io.sockets.on('connection',function(socket){
   socket.on('getAllMessages',function(){
@@ -91,7 +49,68 @@ io.sockets.on('connection',function(socket){
   });
   socket.on('createMessage',function(message){
     messages.push(message);
-    io.socket.emit('messageAdded',message);
+    io.sockets.emit('messageAdded',message);
   });
 });
-module.exports = app;
+
+app.get('/api/validate',function(req,res){
+  var _userId = User.session._userId;
+  if (_userId){
+    Controllers.User.findUserById(_userId,function(err,user){
+      if (err) {
+        res.json(401, {
+          msg: err
+        });
+      }else{
+        res.json(user)
+      }
+    });
+  }else{
+    res.json(401,null);
+  }
+});
+
+app.post('/api/login',function(req,res){
+  console.log(req);
+  var email = req.body.email;
+  if (email) {
+    Controllers.User.findByEmailOrCreate(email,function(err,user){
+      if(err) {
+        res.json(500,{
+          msg:err
+        });
+      }else{
+        req.session._userId = user._id;
+        res.json(user);
+      }
+    });
+  }else{
+    res.json(403);
+  }
+});
+
+app.get('/api/logout',function(req,res){
+  req.session._userId = null;
+  res.json(401);
+});
+
+io.set('authorization',function(handshakeData,accept){
+  signedCookieParser(handshakeData,{},function(err){
+    if (err) {
+      accept(err,false);
+    }else{
+      sessionStore.get(handshakeData.signedCookies['connect.sid'], function(err,session){
+        if (err){
+          accept(err.massage,false);
+        }else{
+          handshakeData.session = session;
+          if(session){
+            accept(null,true);
+          }else {
+            accept('No login');
+          }
+        }
+      });
+    }
+  });
+});
