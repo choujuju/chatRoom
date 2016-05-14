@@ -1,4 +1,4 @@
-angular.module('chatRoomApp',['ngRoute']).config(function($routeProvider,$locationProvider){
+angular.module('chatRoomApp').config(function($routeProvider,$locationProvider){
 	$locationProvider.html5Mode(true);
 	$routeProvider.when('/',{
 		templateUrl: '/pages/room.html',

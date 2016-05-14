@@ -1,10 +1,11 @@
 angular.module('chatRoomApp',['ngRoute']);
 
-angular.module('chatRoomApp',['ngRoute']).run(function($window,$rootScope,$http,$location){
+angular.module('chatRoomApp').run(function($window,$rootScope,$http,$location){
 	$http({
 		url: '/api/validate',
 		method:'GET'
 	}).success(function(user){
+		console.log(user);
 		$rootScope.me = user;
 		$location.path('/');
 	}).error(function(data){
