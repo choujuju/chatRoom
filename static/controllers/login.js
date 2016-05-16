@@ -6,9 +6,8 @@ angular.module('chatRoomApp').controller('LoginCtrl',function($scope,$http,$loca
 			data: {
 				email:$scope.email
 			}
-		}).success(function(user,a,b,c,d){
-			email=c.data.email;
-			$scope.$emit('login',email);
+		}).success(function(user){
+			$scope.$emit('login',user);
 			$location.path('/');
 		}).error(function(data) {
 			$location.path('/login');
