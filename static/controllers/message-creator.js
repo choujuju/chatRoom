@@ -6,7 +6,8 @@ angular.module('chatRoomApp').controller('MessageCreatorCtrl',function($scope,so
 		}
 		socket.emit('createMessage',{
 			message: $scope.newMessage,
-			creator: $scope.me
+			creator: $scope.me,
+			_roomId: $scope.room._id
 		});
 		$scope.newMessage = '';
 	};

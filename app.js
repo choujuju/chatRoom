@@ -7,6 +7,9 @@ var signedCookieParser = cookieParser('chatRoom');
 var session = require('express-session');
 var Controllers = require('./controllers');
 var async = require('async');
+var mongoose = require('mongoose');
+var Schema = mongoose.Schema;
+var ObjectId = Schema.ObjectId;
 var MongoStore = require('connect-mongo')(session);
 var sessionStore = new MongoStore({
   url:'mongodb://localhost/chatRoom'
@@ -102,26 +105,6 @@ var messages = [];
 
 io.sockets.on('connection',function(socket){
   console.log('socket is connected');
-  socket.on('getRoom',function(){
-    async.parallel([
-      function(done){
-        Controllers.User.getOnlineUsers(done);
-      },function(done){
-        Controllers.Message.read(done);
-      }],
-      function(err,results){
-        if (err){
-          socket.emit('err',{
-            msg:err
-          });
-        }else{
-          socket.emit('roomData',{
-            users: results[0],
-            messages: results[1]
-          });
-        }
-      });
-  });
   socket.on('createMessage',function(message){
     Controllers.Message.create(message,function(err){
       if (err){
@@ -132,9 +115,11 @@ io.sockets.on('connection',function(socket){
         msg={
           content:message.message,
           creator:message.creator,
+          _roomId:message._roomId,
           createAt:new Date
         }
-        io.sockets.emit('messageAdded',msg);
+        socket.in(message._roomId).broadcast.emit('messageAdded',message);
+        socket.emit('messageAdded',msg);
       }
     });
   });
@@ -153,6 +138,79 @@ io.sockets.on('connection',function(socket){
       });
     };
   });
+  socket.on('createRoom',function(room){
+    Controllers.Room.create(room,function(err,room){
+      if(err){
+        socket.emit('err',{
+          msg:err
+        });
+      }else{
+        io.sockets.emit('roomAdded',room);
+      }
+    });
+  });
+  socket.on('getAllRooms',function(data){
+    if(data && data._roomId){
+      Controllers.Room.getById(data._roomId,function(err,room){
+        if(err){
+          socket.emit('err',{
+            msg:err
+          });
+        }else{
+          socket.emit('roomData.'+data._roomId,room);
+        }
+      });
+    }else{
+      Controllers.Room.read(function(err,rooms){
+        if(err){
+          socket.emit('err',{
+            msg:err
+          });
+        }else{
+          socket.emit('roomsData',rooms);
+        }
+      });
+    }
+  });
+  socket.on('joinRoom',function(join){
+    Controllers.User.joinRoom(join,function(err){
+      if(err){
+        socket.emit('err',{
+          msg:err
+        });
+      }else{
+        socket.join(join.room._id);
+        socket.emit('joinRoom.'+join.user._id,join);
+        socket.in(join.room._id).broadcast.emit('messageAdded',{
+          content:join.user._id,
+          creator:'SYSTEM',
+          createAt:new Date(),
+          _id:ObjectId()
+        });
+        socket.in(join.room._id).broadcast.emit('joinRoom',join);
+      }
+    });
+  });
+  //用户跳转到其他页面，服务器用过socket.leave来断开socket
+  socket.on('leaveRoomMessage',function(leave){
+    Controllers.User.leaveRoom(leave,function(err){
+      if(err){
+        socket.emit('err',{
+          msg:err
+        });
+      }else{
+        socket.in(leave.user._id).broadcast.emit('messageAdded',{
+          content:leave.user.name+'离开了聊天室',
+          creator:'SYSTEM',
+          createAt:new Date(),
+          _id: ObjectId()
+        });
+        socket.leave(leave.room._id);
+        io.sockets.emit('leaveRoomBroadcast',leave);
+      }
+    });
+  });
+  //用户关闭页面或者断网了，即用户主动断开了socket
   socket.on('disconnect',function(){
     Controllers.User.offline(_userId,function(err,user){
       if(err){
@@ -160,13 +218,19 @@ io.sockets.on('connection',function(socket){
           msg:err
         });
       }else{
-        socket.broadcast.emit('offline',user);
-        socket.broadcast.emit('messageAdded',{
-        content: user.name + '离开了聊天室',
-        creator:'SYSTEM',
-        createAt: new Date()
-      });
-      };
+        if(user._roomId){
+          socket.in(user._roomId).broadcast.emit('leaveRoomBroadcast',user);
+          socket.in(user._roomId).broadcast.emit('messageAdded',{
+            content:user.name+'离开了聊天室',
+            creator:'SYSTEM',
+            createAt:new Date(),
+            _id:ObjectId()
+          });
+          Controllers.User.leaveRoom({
+            user:user
+          },function(){});
+        }
+      }
     });
   });
 });

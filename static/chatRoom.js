@@ -6,9 +6,8 @@ angular.module('chatRoomApp').run(function($window,$rootScope,$http,$location){
 		url: '/api/validate',
 		method:'GET'
 	}).success(function(user){
-		console.log(user);
 		$rootScope.me = user;
-		$location.path('/');
+		$location.path('/rooms');
 	}).error(function(data){
 		$location.path('/login');
 	});

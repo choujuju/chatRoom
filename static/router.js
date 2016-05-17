@@ -1,11 +1,14 @@
 angular.module('chatRoomApp').config(function($routeProvider,$locationProvider){
 	$locationProvider.html5Mode(true);
-	$routeProvider.when('/',{
+	$routeProvider.when('/rooms',{
+		templateUrl: '/pages/rooms.html',
+		controller: 'RoomsCtrl'
+	}).when('/rooms/:_roomId',{
 		templateUrl: '/pages/room.html',
-		controllers: 'RoomCtrl'
+		controller: 'RoomCtrl'
 	}).when('/login',{
 		templateUrl: '/pages/login.html',
-		controllers: 'LoginCtrl'
+		controller: 'LoginCtrl'
 	}).otherwise({
 		redirectTo: '/login'
 	});
